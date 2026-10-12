@@ -50,7 +50,10 @@ export default function News() {
   return (
     <>
       <header className="page-head">
-        <h1>News alerts</h1>
+        <div className="titles">
+          <span className="eyebrow">03 · NEWS ALERTS</span>
+          <h1>News &amp; <em>analysis</em></h1>
+        </div>
         <button className="btn primary" onClick={() => setUploading(true)}>Upload news</button>
       </header>
 

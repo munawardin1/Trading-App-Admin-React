@@ -118,7 +118,10 @@ export default function Signals() {
   return (
     <>
       <header className="page-head">
-        <h1>Signals</h1>
+        <div className="titles">
+          <span className="eyebrow">02 · SIGNALS</span>
+          <h1>Manage <em>signals</em></h1>
+        </div>
         <div className="row">
           <button className="btn ghost" onClick={addSamples} disabled={busyId === 'samples'}>
             {busyId === 'samples' ? 'Adding…' : 'Add sample signals'}

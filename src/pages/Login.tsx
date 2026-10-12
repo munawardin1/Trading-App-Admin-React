@@ -43,8 +43,11 @@ export default function Login() {
   return (
     <div className="center">
       <form className="card auth-card" onSubmit={submit}>
-        <img src="/logo.png" alt="" className="auth-logo" />
-        <h1>Cron Trading Admin</h1>
+        <div className="auth-avatar">
+          <img src="/cron-mark.png" alt="" />
+        </div>
+        <span className="eyebrow">Cron Technologies</span>
+        <h1>Cron Trading <em>admin</em></h1>
         <p className="muted">Sign in with the same account you use in the app.</p>
         <label>
           Email

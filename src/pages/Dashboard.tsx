@@ -24,12 +24,15 @@ export default function Dashboard() {
   return (
     <>
       <header className="page-head">
-        <h1>Dashboard</h1>
+        <div className="titles">
+          <span className="eyebrow">01 · DASHBOARD</span>
+          <h1>Your <em>overview</em></h1>
+        </div>
       </header>
       {error && <div className="alert error">{error}</div>}
 
       <section className="stats">
-        <Stat label="Signals shown in app" value={visible} hint="Live, not deleted, not expired" />
+        <Stat label="Signals shown in app" value={visible} hint="Live, not deleted, not expired" tile />
         <Stat label="All signals" value={signals?.length} />
         <Stat label="Not live (drafts)" value={signals?.filter((s) => !s.isLive && !s.isDeleted).length} />
         <Stat label="News alerts" value={news?.filter((n) => !n.isDeleted).length} />
@@ -67,10 +70,10 @@ export default function Dashboard() {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) {
+function Stat({ label, value, hint, tile }: { label: string; value: number | undefined; hint?: string; tile?: boolean }) {
   return (
-    <div className="card stat" title={hint}>
-      <span className="muted small">{label}</span>
+    <div className={`card stat${tile ? ' tile' : ''}`} title={hint}>
+      <span className="label muted">{label}</span>
       <strong>{value ?? '–'}</strong>
     </div>
   );

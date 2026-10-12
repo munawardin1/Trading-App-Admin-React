@@ -15,7 +15,7 @@ export default function NotAdmin() {
   return (
     <div className="center">
       <div className="card auth-card">
-        <h1>Not an admin yet</h1>
+        <h1>Not an <em>admin</em> yet</h1>
         <p>
           You are signed in as <strong>{user?.email}</strong>, but this account does not have admin rights.
         </p>
