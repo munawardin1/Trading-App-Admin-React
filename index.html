@@ -5,6 +5,19 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cron Trading Admin</title>
+    <!-- Brand fonts: Fraunces (headlines), Poppins (body), Space Grotesk (labels) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,400&family=Poppins:wght@400;500;600&family=Space+Grotesk:wght@500&display=swap"
+    />
+    <script>
+      // Light (Cream) is the default; apply a saved dark choice before first paint.
+      try {
+        if (localStorage.getItem('cron-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

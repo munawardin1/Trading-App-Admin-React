@@ -1,0 +1,67 @@
+/* Cron brand theme. Source of truth: G:\TradingApp\BRAND_GUIDE.md.
+   Cron Technologies product: Ink, Cream and Bronze, with Forest and Sage.
+   Never blue, teal or purple. Light (Cream) is the default; dark (Ink) is optional. */
+
+:root {
+  /* Palette */
+  --bronze: #b58b5a;
+  --ink: #0e1a13;
+  --cream: #f6f1e8;
+  --forest: #2f5a3c;
+  --sage: #5e7f62;
+  --mist-sage: #9fb59c;
+  --brick-red: #c0624a; /* only for price down, loss, sell, errors */
+
+  /* Approved neutrals */
+  --ink-raised: #16241b;
+  --ink-line: #26362a;
+  --muted-on-ink: #a3ad9f;
+  --white-cream: #fbf8f2;
+  --cream-line: #e2d9c8;
+  --muted-on-cream: #5c6158;
+
+  /* Fonts */
+  --font-headline: 'Fraunces', Georgia, serif;
+  --font-body: 'Poppins', system-ui, sans-serif;
+  --font-label: 'Space Grotesk', system-ui, sans-serif;
+
+  /* Approved spacing (4 px grid) and corners */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius: 8px;
+
+  /* Light mode (default): Cream background, Ink text, Bronze accents */
+  --bg: var(--cream);
+  --surface: var(--white-cream);
+  --surface-2: #f1eadd;
+  --line: var(--cream-line);
+  --text: var(--ink);
+  --muted: var(--muted-on-cream);
+  --accent: var(--bronze);
+  --accent-text: #8a6638; /* Bronze darkened for small text on Cream */
+  --on-accent: var(--ink);
+  --up: var(--forest);
+  --down: var(--brick-red);
+  --tile: var(--forest); /* "Product" pairing for dashboard stat tiles */
+  --on-tile: var(--cream);
+  --on-tile-muted: var(--mist-sage);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  /* Dark mode: Ink background, Cream text, Bronze accents */
+  --bg: var(--ink);
+  --surface: var(--ink-raised);
+  --surface-2: #1c2c21;
+  --line: var(--ink-line);
+  --text: var(--cream);
+  --muted: var(--muted-on-ink);
+  --accent-text: var(--bronze);
+  --up: var(--mist-sage);
+  color-scheme: dark;
+}
