@@ -185,7 +185,7 @@ export default function Signals() {
                   <td>
                     <strong>{displaySymbol(s.type, s.coin)}</strong>
                     <span className={`dir ${s.direction === 'LONG' ? 'up' : 'down'}`}>{s.direction}</span>
-                    <div className="muted small">{s.type}</div>
+                    {s.type === 'GOLD' ? <div><span className="tag-gold">GOLD</span></div> : <div className="muted small">{s.type}</div>}
                   </td>
                   <td className="mono">{fmtPrice(s.entryPrice)} → {fmtPrice(s.exitPrice)}</td>
                   <td className={`mono ${s.gainLossPercentage >= 0 ? 'up' : 'down'}`}>

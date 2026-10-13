@@ -109,6 +109,7 @@ pre { font-family: ui-monospace, Consolas, monospace; }
 .btn.ghost { background: transparent; border-color: var(--line); }
 .btn.ghost:hover:not(:disabled) { border-color: var(--accent); }
 button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-text); text-decoration: underline; cursor: pointer; }
+.tag-gold { display: inline-block; background: #EFBF04; color: #0E1A13; font-family: var(--font-label); font-size: 10px; letter-spacing: 0.08em; padding: 1px 6px; border-radius: 4px; }
 .btn.danger { background: transparent; border-color: var(--down); color: var(--down); }
 .btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--down) 10%, transparent); }
 .btn.small { padding: 5px 10px; min-height: 30px; font-size: 0.82rem; }
