@@ -1,6 +1,6 @@
 import { API_URL } from './config';
 import { auth } from './firebase';
-import type { NewsAlert, Signal, SignalInput } from './types';
+import type { NewsAlert, Signal, SignalInput, SignalType } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
@@ -108,5 +108,34 @@ export async function pingServer(): Promise<{ ok: boolean; ms: number; btc?: str
     return { ok: true, ms, btc: data.lastPrice };
   } catch {
     return { ok: false, ms: Math.round(performance.now() - start) };
+  }
+}
+
+/**
+ * Current price for a signal symbol, or null if unavailable:
+ * crypto from Binance spot, gold (XAUUSD) from the Binance XAUUSDT contract,
+ * forex (EURUSD) from the server's forex quotes.
+ */
+export async function getLivePrice(type: SignalType, symbol: string): Promise<number | null> {
+  const s = symbol.trim().toUpperCase();
+  if (!s) return null;
+  try {
+    if (type === 'FOREX') {
+      const res = await fetch(`${API_URL}/market/fx/quotes`);
+      if (!res.ok) return null;
+      const quotes = (await res.json()) as { symbol: string; lastPrice: number }[];
+      const price = Number(quotes.find((q) => q.symbol === s)?.lastPrice);
+      return price > 0 ? price : null;
+    }
+    if (type === 'GOLD') {
+      const contract = s.replace(/USDT?$/, '') + 'USDT';
+      const res = await fetch(`${API_URL}/market/ticker?market=usdt_perp&symbol=${encodeURIComponent(contract)}`);
+      if (!res.ok) return null;
+      const price = Number(((await res.json()) as { lastPrice?: string }).lastPrice);
+      return price > 0 ? price : null;
+    }
+    return await getSpotPrice(s);
+  } catch {
+    return null;
   }
 }

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, getSpotPrice } from '../api';
+import { api, getLivePrice } from '../api';
 import { useAuth } from '../auth';
 import Modal from '../components/Modal';
 import SignalForm, { calcGainLoss } from '../components/SignalForm';
 import type { Signal, SignalInput } from '../types';
-import { SUBSCRIPTION_LABELS } from '../types';
+import { displaySymbol, planLabel } from '../types';
 
 type Tab = 'live' | 'drafts' | 'expired' | 'deleted' | 'all';
 
@@ -80,7 +80,14 @@ export default function Signals() {
   async function addSamples() {
     setBusyId('samples');
     setError('');
-    const [btc, eth] = await Promise.all([getSpotPrice('BTCUSDT'), getSpotPrice('ETHUSDT')]);
+    const [btc, eth, sol, eur, gbpjpy, xau] = await Promise.all([
+      getLivePrice('CRYPTO', 'BTCUSDT'),
+      getLivePrice('CRYPTO', 'ETHUSDT'),
+      getLivePrice('CRYPTO', 'SOLUSDT'),
+      getLivePrice('FOREX', 'EURUSD'),
+      getLivePrice('FOREX', 'GBPJPY'),
+      getLivePrice('GOLD', 'XAUUSD'),
+    ]);
     const expireAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const make = (s: Omit<SignalInput, 'gainLossPercentage' | 'createdBy' | 'expireAt' | 'isLive' | 'hasTradingAnalysis' | 'tradingAnalysis'>): SignalInput => ({
       ...s,
@@ -94,15 +101,21 @@ export default function Signals() {
     const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
     const btcP = btc ?? 80000;
     const ethP = eth ?? 3000;
+    const solP = sol ?? 150;
+    const eurP = eur ?? 1.08;
+    const gjP = gbpjpy ?? 195;
+    const xauP = xau ?? 2400;
     const samples: SignalInput[] = [
       make({ type: 'CRYPTO', coin: 'BTCUSDT', direction: 'LONG', entryPrice: round(btcP), exitPrice: round(btcP * 1.06), portfolioPercentage: 5, subscriptionValue: 'spot-free' }),
       make({ type: 'CRYPTO', coin: 'ETHUSDT', direction: 'SHORT', entryPrice: round(ethP), exitPrice: round(ethP * 0.93), portfolioPercentage: 3, subscriptionValue: 'spot-free' }),
-      make({ type: 'GOLD', direction: 'LONG', entryPrice: 2400, exitPrice: 2480, portfolioPercentage: 10, subscriptionValue: 'spot-free' }),
-      make({ type: 'STOCKS', coin: 'AAPL', direction: 'LONG', entryPrice: 230, exitPrice: 245, portfolioPercentage: 4, subscriptionValue: 'spot-paid' }),
+      make({ type: 'CRYPTO', coin: 'SOLUSDT', direction: 'LONG', entryPrice: round(solP), exitPrice: round(solP * 1.12), portfolioPercentage: 4, subscriptionValue: 'future-paid' }),
+      make({ type: 'FOREX', coin: 'EURUSD', direction: 'LONG', entryPrice: round(eurP, 5), exitPrice: round(eurP * 1.008, 5), portfolioPercentage: 5, subscriptionValue: 'spot-free' }),
+      make({ type: 'FOREX', coin: 'GBPJPY', direction: 'SHORT', entryPrice: round(gjP, 3), exitPrice: round(gjP * 0.99, 3), portfolioPercentage: 3, subscriptionValue: 'spot-paid' }),
+      make({ type: 'GOLD', coin: 'XAUUSD', direction: 'LONG', entryPrice: round(xauP), exitPrice: round(xauP * 1.03), portfolioPercentage: 10, subscriptionValue: 'spot-free' }),
     ];
     try {
       for (const s of samples) await api.createSignal(s);
-      setNotice('Added 4 sample signals: 3 free (BTC, ETH, Gold) and 1 paid (AAPL, visible to subscribers only).');
+      setNotice('Added 6 sample signals: crypto (BTC, ETH free; SOL futures paid), forex (EUR/USD free; GBP/JPY paid) and gold (free). Paid ones are locked for free users.');
       setTab('live');
       await load();
     } catch (e) {
@@ -170,7 +183,7 @@ export default function Signals() {
               {rows.map((s) => (
                 <tr key={s._id} className={busyId === s._id ? 'busy' : ''}>
                   <td>
-                    <strong>{s.type === 'GOLD' ? 'GOLD' : s.coin || '—'}</strong>
+                    <strong>{displaySymbol(s.type, s.coin)}</strong>
                     <span className={`dir ${s.direction === 'LONG' ? 'up' : 'down'}`}>{s.direction}</span>
                     <div className="muted small">{s.type}</div>
                   </td>
@@ -179,7 +192,7 @@ export default function Signals() {
                     {s.gainLossPercentage > 0 ? '+' : ''}{s.gainLossPercentage}%
                   </td>
                   <td className="mono">{s.portfolioPercentage}%</td>
-                  <td>{SUBSCRIPTION_LABELS[s.subscriptionValue] ?? s.subscriptionValue}</td>
+                  <td>{planLabel(s.type, s.subscriptionValue)}</td>
                   <td className="small">{fmtDate(s.expireAt)}</td>
                   <td>
                     {s.isDeleted ? (

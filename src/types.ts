@@ -1,4 +1,4 @@
-export type SignalType = 'CRYPTO' | 'GOLD' | 'STOCKS';
+export type SignalType = 'CRYPTO' | 'FOREX' | 'GOLD' | 'STOCKS';
 export type Direction = 'LONG' | 'SHORT';
 export type SubscriptionValue = 'spot-free' | 'spot-paid' | 'future-free' | 'future-paid';
 
@@ -64,3 +64,17 @@ export const SUBSCRIPTION_LABELS: Record<SubscriptionValue, string> = {
   'future-free': 'Futures · Free',
   'future-paid': 'Futures · Paid',
 };
+
+/** Plan label for a signal: forex and gold have no spot/futures split. */
+export function planLabel(type: SignalType, plan: SubscriptionValue): string {
+  if (type === 'CRYPTO') return SUBSCRIPTION_LABELS[plan] ?? plan;
+  return plan.endsWith('paid') ? 'Paid' : 'Free';
+}
+
+/** Display symbol: EURUSD -> EUR/USD, XAUUSD (or none) -> XAU/USD, crypto unchanged. */
+export function displaySymbol(type: SignalType, coin?: string): string {
+  const c = (coin ?? '').toUpperCase();
+  if (type === 'GOLD') return c ? `${c.replace(/USDT?$/, '')}/USD` : 'XAU/USD';
+  if (type === 'FOREX' && c.length === 6) return `${c.slice(0, 3)}/${c.slice(3)}`;
+  return c || '—';
+}

@@ -1,6 +1,17 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { getLivePrice } from '../api';
 import type { Direction, Signal, SignalInput, SignalType, SubscriptionValue } from '../types';
 import { SUBSCRIPTION_LABELS } from '../types';
+
+/** Example symbol per market, also the default for gold. */
+const PLACEHOLDER: Record<SignalType, string> = { CRYPTO: 'BTCUSDT', FOREX: 'EURUSD', GOLD: 'XAUUSD', STOCKS: 'AAPL' };
+
+/** Forex pairs the app has prices and charts for (server ForexService). */
+const FX_PAIRS = [
+  'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD',
+  'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'EURAUD', 'EURCHF', 'GBPCHF',
+  'USDPKR', 'USDAED', 'USDSAR', 'USDINR', 'USDTRY', 'USDZAR', 'USDMXN',
+];
 
 interface Props {
   initial?: Signal;
@@ -28,7 +39,7 @@ const inAWeek = () => new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
 export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: Props) {
   const [type, setType] = useState<SignalType>(initial?.type ?? 'CRYPTO');
-  const [coin, setCoin] = useState(initial?.coin ?? '');
+  const [coin, setCoin] = useState(initial?.coin ?? (initial?.type === 'GOLD' ? 'XAUUSD' : ''));
   const [direction, setDirection] = useState<Direction>(initial?.direction ?? 'LONG');
   const [entry, setEntry] = useState(initial ? String(initial.entryPrice) : '');
   const [exit, setExit] = useState(initial ? String(initial.exitPrice) : '');
@@ -42,6 +53,31 @@ export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+
+  // Current market price for the symbol, so entry and target are realistic.
+  useEffect(() => {
+    setLivePrice(null);
+    if (!coin.trim()) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const p = await getLivePrice(type, coin);
+      if (!cancelled) setLivePrice(p);
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [type, coin]);
+
+  function changeType(next: SignalType) {
+    setType(next);
+    if (next === 'GOLD') setCoin('XAUUSD');
+    else if (type === 'GOLD') setCoin('');
+    // Forex and gold have no futures plans.
+    if (next !== 'CRYPTO' && plan.startsWith('future')) setPlan(plan === 'future-paid' ? 'spot-paid' : 'spot-free');
+  }
+
   const autoGain = calcGainLoss(direction, Number(entry), Number(exit));
   const shownGain = gainEdited ? gain : entry && exit ? String(autoGain) : '';
 
@@ -50,7 +86,10 @@ export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: 
     setError('');
     const entryN = Number(entry);
     const exitN = Number(exit);
-    if (type !== 'GOLD' && !coin.trim()) return setError('Enter the coin or stock symbol, e.g. BTCUSDT or AAPL.');
+    if (!coin.trim()) return setError(`Enter the symbol, e.g. ${PLACEHOLDER[type]}.`);
+    if (type === 'FOREX' && !FX_PAIRS.includes(coin.trim().toUpperCase())) {
+      return setError(`The app has prices for these pairs only: ${FX_PAIRS.join(', ')}.`);
+    }
     if (!(entryN > 0) || !(exitN > 0)) return setError('Entry and exit prices must be greater than 0.');
     if (new Date(expireAt).getTime() <= Date.now()) return setError('Expiry must be in the future, or the app will hide the signal.');
 
@@ -58,8 +97,7 @@ export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: 
     try {
       await onSubmit({
         type,
-        // The server rejects a coin on GOLD signals.
-        coin: type === 'GOLD' ? undefined : coin.trim().toUpperCase(),
+        coin: coin.trim().toUpperCase(),
         direction,
         entryPrice: entryN,
         exitPrice: exitN,
@@ -82,20 +120,32 @@ export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: 
     <form className="form-grid" onSubmit={submit}>
       <label>
         Market
-        <select value={type} onChange={(e) => setType(e.target.value as SignalType)}>
+        <select value={type} onChange={(e) => changeType(e.target.value as SignalType)}>
           <option value="CRYPTO">Crypto</option>
+          <option value="FOREX">Forex</option>
           <option value="GOLD">Gold</option>
-          <option value="STOCKS">Stocks</option>
+          {/* Stocks have no tab in the app yet; kept only for editing old signals. */}
+          {type === 'STOCKS' && <option value="STOCKS">Stocks</option>}
         </select>
       </label>
       <label>
         Symbol
-        <input
-          value={type === 'GOLD' ? '' : coin}
-          onChange={(e) => setCoin(e.target.value)}
-          placeholder={type === 'GOLD' ? 'Not used for gold' : type === 'CRYPTO' ? 'BTCUSDT' : 'AAPL'}
-          disabled={type === 'GOLD'}
-        />
+        {type === 'FOREX' ? (
+          <select value={coin.toUpperCase()} onChange={(e) => setCoin(e.target.value)}>
+            <option value="">Choose a pair…</option>
+            {FX_PAIRS.map((p) => (
+              <option key={p} value={p}>{`${p.slice(0, 3)}/${p.slice(3)}`}</option>
+            ))}
+          </select>
+        ) : (
+          <input value={coin} onChange={(e) => setCoin(e.target.value)} placeholder={PLACEHOLDER[type]} />
+        )}
+        {livePrice != null && (
+          <small className="muted">
+            Now {livePrice.toLocaleString(undefined, { maximumFractionDigits: type === 'FOREX' ? 5 : 8 })}{' '}
+            <button type="button" className="link" onClick={() => setEntry(String(livePrice))}>use as entry</button>
+          </small>
+        )}
       </label>
       <label>
         Direction
@@ -107,9 +157,16 @@ export default function SignalForm({ initial, adminEmail, onSubmit, onCancel }: 
       <label>
         Plan
         <select value={plan} onChange={(e) => setPlan(e.target.value as SubscriptionValue)}>
-          {Object.entries(SUBSCRIPTION_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
+          {type === 'CRYPTO' ? (
+            Object.entries(SUBSCRIPTION_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))
+          ) : (
+            <>
+              <option value="spot-free">Free</option>
+              <option value="spot-paid">Paid (subscribers)</option>
+            </>
+          )}
         </select>
       </label>
       <label>
