@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { api, uploadNewsWithProgress } from '../api';
 import { useAuth } from '../auth';
 import Modal from '../components/Modal';
 import type { NewsAlert, NewsContentType } from '../types';
@@ -12,7 +12,8 @@ export default function News() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // Which upload form is open: a reel video, or an image post.
+  const [uploading, setUploading] = useState<UploadMode | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -54,12 +55,16 @@ export default function News() {
           <span className="eyebrow">03 · NEWS ALERTS</span>
           <h1>News &amp; <em>analysis</em></h1>
         </div>
-        <button className="btn primary" onClick={() => setUploading(true)}>Upload news</button>
+        <div className="row">
+          <button className="btn ghost" onClick={() => setUploading('images')}>Upload images</button>
+          <button className="btn primary" onClick={() => setUploading('video')}>▶ Upload video (Reel)</button>
+        </div>
       </header>
 
       <div className="alert info">
-        Uploading needs real AWS S3 keys on the server (Railway variables <code>AWS_*</code>). With placeholder keys the
-        upload will fail. The server also caches this list, so changes can take a while to appear here.
+        <strong>Videos</strong> show in the app under <strong>Analysis → Reels</strong>, <strong>images</strong> under
+        Analysis → News, as soon as they are <strong>Live</strong>. Files are stored in AWS S3 (Railway variables{' '}
+        <code>AWS_*</code> on the server).
       </div>
       {error && <div className="alert error">{error}</div>}
       {notice && (
@@ -105,7 +110,17 @@ export default function News() {
                     <div className="muted small clamp">{n.description}</div>
                   </td>
                   <td className="cap">{n.contentType}</td>
-                  <td>{n.type === 'video' ? 'Video' : `${n.rawAwsLinkImages?.length ?? 0} image(s)`}</td>
+                  <td>
+                    {n.type === 'video' ? (
+                      n.rawAwsLinkVideo ? (
+                        <a href={n.rawAwsLinkVideo} target="_blank" rel="noreferrer">▶ Watch video</a>
+                      ) : (
+                        'Video'
+                      )
+                    ) : (
+                      `${n.rawAwsLinkImages?.length ?? 0} image(s)`
+                    )}
+                  </td>
                   <td className="small">{n.processingStatus ?? '—'}</td>
                   <td className="small">{new Date(n.createdAt).toLocaleDateString()}</td>
                   <td>
@@ -142,14 +157,20 @@ export default function News() {
       </div>
 
       {uploading && (
-        <Modal title="Upload news alert" onClose={() => setUploading(false)}>
+        <Modal title={uploading === 'video' ? 'Upload video (Reel)' : 'Upload images'} onClose={() => setUploading(null)}>
           <UploadForm
-            onDone={async () => {
-              setUploading(false);
-              setNotice('News uploaded. It starts as not live: click "Go live" to show it in the app.');
+            mode={uploading}
+            onDone={async (live) => {
+              const what = uploading === 'video' ? 'Video' : 'Images';
+              setUploading(null);
+              setNotice(
+                live
+                  ? `${what} uploaded and live. Open the app: Analysis → ${uploading === 'video' ? 'Reels' : 'News'} (pull down to refresh).`
+                  : `${what} uploaded as not live. Click "Go live" to show it in the app.`,
+              );
               await load();
             }}
-            onCancel={() => setUploading(false)}
+            onCancel={() => setUploading(null)}
           />
         </Modal>
       )}
@@ -157,23 +178,26 @@ export default function News() {
   );
 }
 
-function UploadForm({ onDone, onCancel }: { onDone: () => Promise<void>; onCancel: () => void }) {
+type UploadMode = 'video' | 'images';
+
+function UploadForm({ mode, onDone, onCancel }: { mode: UploadMode; onDone: (live: boolean) => Promise<void>; onCancel: () => void }) {
   const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [contentType, setContentType] = useState<NewsContentType>('crypto');
   const [files, setFiles] = useState<File[]>([]);
+  const [live, setLive] = useState(true);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const isVideo = mode === 'video';
+  const busy = progress !== null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
-    const videos = files.filter((f) => f.type.startsWith('video/'));
-    if (files.length === 0) return setError('Choose at least one image, or one video.');
-    if (videos.length > 0 && files.length > 1) return setError('Upload either one video, or up to 7 images, not both.');
-    if (videos.length === 1 && !videos[0].name.toLowerCase().endsWith('.mp4')) return setError('Videos must be .mp4 files.');
-    if (files.length > 7) return setError('Maximum 7 images.');
+    if (files.length === 0) return setError(isVideo ? 'Choose an .mp4 video.' : 'Choose at least one image.');
+    if (isVideo && !files[0].name.toLowerCase().endsWith('.mp4')) return setError('Videos must be .mp4 files (H.264).');
+    if (!isVideo && files.length > 7) return setError('Maximum 7 images.');
     const big = files.find((f) => f.size > MAX_MB * 1024 * 1024);
     if (big) return setError(`${big.name} is larger than ${MAX_MB} MB.`);
 
@@ -182,54 +206,72 @@ function UploadForm({ onDone, onCancel }: { onDone: () => Promise<void>; onCance
     form.append('description', description.trim());
     form.append('contentType', contentType);
     form.append('createdBy', user?.email ?? 'admin');
+    form.append('isLive', String(live));
     files.forEach((f) => form.append('files', f));
 
-    setBusy(true);
+    setProgress(0);
     try {
-      await api.uploadNews(form);
-      await onDone();
+      await uploadNewsWithProgress(form, setProgress);
+      await onDone(live);
     } catch (err) {
       setError((err as Error).message);
-      setBusy(false);
+      setProgress(null);
     }
   }
+
+  const sizeMb = files.reduce((n, f) => n + f.size, 0) / 1024 / 1024;
+  const preview = isVideo && files[0] ? URL.createObjectURL(files[0]) : null;
 
   return (
     <form className="form-grid" onSubmit={submit}>
       <label className="span-2">
+        {isVideo ? 'Video (.mp4, up to 100 MB)' : 'Images (JPG, PNG, WebP, up to 7)'}
+        <input
+          type="file"
+          multiple={!isVideo}
+          accept={isVideo ? 'video/mp4' : 'image/jpeg,image/png,image/gif,image/webp'}
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          disabled={busy}
+        />
+        {files.length > 0 && (
+          <small className="muted">
+            {isVideo ? files[0].name : `${files.length} image(s)`} · {sizeMb.toFixed(1)} MB
+          </small>
+        )}
+      </label>
+      {preview && <video className="span-2 upload-preview" src={preview} controls muted playsInline />}
+      <label className="span-2">
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} required disabled={busy} />
       </label>
       <label className="span-2">
-        Description
-        <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} required />
+        {isVideo ? 'Caption' : 'Description'}
+        <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} required disabled={busy} />
       </label>
       <label>
         Category
-        <select value={contentType} onChange={(e) => setContentType(e.target.value as NewsContentType)}>
+        <select value={contentType} onChange={(e) => setContentType(e.target.value as NewsContentType)} disabled={busy}>
           <option value="crypto">Crypto</option>
-          <option value="stocks">Stocks</option>
           <option value="gold">Gold</option>
+          <option value="stocks">Stocks</option>
         </select>
       </label>
-      <label>
-        Images (up to 7) or one .mp4 video
-        <input
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4"
-          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-        />
+      <label className="check">
+        <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} disabled={busy} />
+        Publish now (show in the app)
       </label>
-      {files.length > 0 && (
-        <p className="muted small span-2">
-          {files.length} file(s), {(files.reduce((n, f) => n + f.size, 0) / 1024 / 1024).toFixed(1)} MB
-        </p>
+      {busy && (
+        <div className="span-2">
+          <div className="progress"><span style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} /></div>
+          <small className="muted">
+            {(progress ?? 0) < 1 ? `Uploading… ${Math.round((progress ?? 0) * 100)}%` : 'Saving to S3… almost done'}
+          </small>
+        </div>
       )}
       {error && <div className="alert error span-2">{error}</div>}
       <div className="row span-2 end">
-        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button className="btn primary" disabled={busy}>{busy ? 'Uploading…' : 'Upload'}</button>
+        <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn primary" disabled={busy}>{busy ? 'Uploading…' : isVideo ? 'Upload video' : 'Upload images'}</button>
       </div>
     </form>
   );

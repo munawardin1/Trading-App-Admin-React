@@ -139,3 +139,38 @@ export async function getLivePrice(type: SignalType, symbol: string): Promise<nu
     return null;
   }
 }
+
+/**
+ * Uploads news media (one video or up to 7 images) and reports progress
+ * from 0 to 1, so large videos don't look stuck.
+ */
+export async function uploadNewsWithProgress(form: FormData, onProgress: (fraction: number) => void): Promise<NewsAlert> {
+  const user = auth.currentUser;
+  if (!user) throw new ApiError('You are signed out. Please sign in again.', 401);
+  const token = await user.getIdToken();
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/news-alerts/admin/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new ApiError(`Cannot reach the server at ${API_URL}. Is it online?`, 0));
+    xhr.onload = () => {
+      let data: unknown = xhr.responseText;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        /* plain text */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as NewsAlert);
+      const msg =
+        data && typeof data === 'object' && 'message' in data
+          ? String((data as { message: unknown }).message)
+          : xhr.statusText || 'Upload failed';
+      reject(new ApiError(`${msg} (HTTP ${xhr.status})`, xhr.status));
+    };
+    xhr.send(form);
+  });
+}
